@@ -64,6 +64,7 @@
     "Tara Shah",
     "Dev Menon",
   ];
+  const returnTimes = ["Fri 8 pm", "Sat 9 am", "Sat 10 am", "Sat noon"];
   const shifts = [
     {
       time: "Friday · 3:45 pm",
@@ -148,12 +149,14 @@
     "</small></div>" +
     control +
     "</div>";
-  const row = (label, sub, right) =>
+  const row = (label, sub, right, detail = "") =>
     '<div class="row"><div><strong>' +
     esc(label) +
     "</strong><small>" +
     esc(sub) +
-    "</small></div><div>" +
+    "</small>" +
+    detail +
+    "</div><div>" +
     right +
     "</div></div>";
   const badge = (t, good = false) =>
@@ -259,7 +262,7 @@
         select(
           "Return by",
           "due",
-          ["Fri 8 pm", "Sat 9 am", "Sat 10 am", "Sat noon"].map((d) => [d, d]),
+          returnTimes.map((d) => [d, d]),
         ) +
         '</div><button type="submit" class="primary">Save issue slip</button></form>'
       );
@@ -284,15 +287,44 @@
       .slice()
       .reverse();
     if (!shown.length) html += "<p>No outstanding slips.</p>";
-    for (const l of shown)
+    for (const l of shown) {
+      const unit = getAsset(l.asset);
+      const request = getReq(l.req);
       html += row(
-        "L-" + l.num + " · " + l.asset,
-        l.req + " · " + l.who + " · Due " + l.due,
+        "L-" + l.num + " · " + l.asset + " · " + unit.type,
+        l.req + " · " + request.club + " · Collected by " + l.who + " · Due " + l.due,
         l.back
           ? badge("Returned")
           : btn("Record return", "return", String(l.num)),
+        handover(l),
       );
+    }
     return html;
+  }
+  function handover(l) {
+    const plan = l.handover;
+    const summary = plan
+      ? '<p class="handover-plan">' +
+        esc((l.back ? "Handed over to " : "With ") + plan.holder +
+          " · Expected " + plan.expected) + "</p>"
+      : "";
+    if (l.back) return summary;
+
+    const choices = (values, selected) =>
+      values.map((value) =>
+        '<option value="' + esc(value) + '"' +
+        (value === selected ? " selected" : "") + ">" + esc(value) + "</option>"
+      ).join("");
+    return summary +
+      '<details class="handover" data-slip="' + l.num + '">' +
+      "<summary>" + (plan ? "Edit handover" : "Add handover") + "</summary>" +
+      '<form data-handover="' + l.num + '"><div class="form">' +
+      '<label><span>Current holder</span><select name="holder" required>' +
+      '<option value="">Select…</option>' + choices(people, plan?.holder) +
+      '</select></label><label><span>Expected return</span>' +
+      '<select name="expected" required><option value="">Select…</option>' +
+      choices(returnTimes, plan?.expected) +
+      '</select></label></div><button type="submit">Save handover</button></form></details>';
   }
   function deskbook() {
     let html = head(
@@ -426,6 +458,17 @@
     e.preventDefault();
     const f = e.target;
     const form = new FormData(f);
+    if (f.matches("[data-handover]")) {
+      const loan = s.loans.find((l) => l.num === Number(f.dataset.handover));
+      const holder = form.get("holder");
+      const expected = form.get("expected");
+      if (!loan || loan.back || !people.includes(holder) || !returnTimes.includes(expected))
+        return;
+      loan.handover = { holder, expected };
+      commit("Handover saved for " + loan.asset + " on slip L-" + loan.num + ".");
+      q('[data-slip="' + loan.num + '"] summary').focus();
+      return;
+    }
     if (f.matches("[data-note]")) {
       const text = String(form.get("note")).trim();
       if (!text) return;
@@ -482,7 +525,13 @@
     s = {
       ...original(),
       ...d,
-      loans: d.loans.map((l) => ({ ...l })),
+      loans: d.loans.map((l) => {
+        const { handover, ...loan } = l;
+        if (people.includes(handover?.holder) && returnTimes.includes(handover?.expected)) {
+          loan.handover = { holder: handover.holder, expected: handover.expected };
+        }
+        return loan;
+      }),
       notes: d.notes.map((n) => ({ ...n })),
     };
     paint();

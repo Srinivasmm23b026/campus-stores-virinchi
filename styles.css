@@ -251,6 +251,18 @@ body > main {
 #campus-stores label span {
   display: block;
 }
+#campus-stores .handover {
+  margin-top: 5px;
+  font-size: 13px;
+}
+#campus-stores .handover[open] {
+  width: auto;
+}
+#campus-stores .handover-plan {
+  margin-top: 5px;
+  color: var(--memotxt);
+  font-weight: 600;
+}
 #campus-stores .tag {
   background: var(--desk);
   color: var(--quiet);
@@ -361,6 +373,9 @@ body > main {
   }
   #campus-stores .row {
     gap: 5px;
+  }
+  #campus-stores .row:has(.handover) {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (pointer: coarse) {
